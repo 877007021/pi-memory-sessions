@@ -1,5 +1,7 @@
 # pi-memory-sessions
 
+[中文说明](README.zh-CN.md) · **English**
+
 Keyword recall over **your past [pi](https://github.com/earendil-works/pi) sessions** — works for Chinese, English, and mixed content.
 
 Every conversation pi runs is captured into a SQLite index that this extension owns. Delete pi's `sessions/*.jsonl` and recall still works. Ask "what did we decide about X last month?" and the agent can actually answer, because it can search.
@@ -165,7 +167,7 @@ node --no-warnings bench/smoke.ts  # loads index.ts against a mock ExtensionAPI
 node --no-warnings bench/replay.ts # replays real ~/.pi/agent/sessions and reports latency
 ```
 
-Design notes, measurements, and the assumptions that testing disproved are in [DESIGN.md](DESIGN.md).
+Design notes, measurements, and the assumptions that testing disproved are in [DESIGN.md](DESIGN.md) (written in Chinese).
 
 ### Releasing
 
