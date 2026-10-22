@@ -17,6 +17,7 @@ import {
 	upsertSession,
 } from "../src/db.ts";
 import { formatSearch, formatSessionRead, relTime, snippet } from "../src/format.ts";
+import { dbFile, sessionsRoot } from "../src/paths.ts";
 import { renderMessage, renderSummary } from "../src/render.ts";
 import { createSearcher } from "../src/search.ts";
 import { termsOf } from "../src/tokenize.ts";
@@ -431,5 +432,49 @@ describe("format", () => {
 		assert.ok(out.includes("会话 A 的内容"));
 		assert.ok(!out.includes("会话 B 的内容"));
 		assert.ok(foreign);
+	});
+});
+
+describe("paths", () => {
+	function withEnv(vars: Record<string, string | undefined>, run: () => void) {
+		const saved: Record<string, string | undefined> = {};
+		for (const [key, value] of Object.entries(vars)) {
+			saved[key] = process.env[key];
+			if (value === undefined) delete process.env[key];
+			else process.env[key] = value;
+		}
+		try {
+			run();
+		} finally {
+			for (const [key, value] of Object.entries(saved)) {
+				if (value === undefined) delete process.env[key];
+				else process.env[key] = value;
+			}
+		}
+	}
+
+	it("会话源默认跟随 pi 的 agent 目录", () => {
+		withEnv({ PI_MEMORY_SESSIONS_DIR: undefined, PI_CODING_AGENT_SESSION_DIR: undefined, PI_CODING_AGENT_DIR: "/data/agent" }, () => {
+			assert.equal(sessionsRoot(), path.join("/data/agent", "sessions"));
+		});
+	});
+
+	it("PI_CODING_AGENT_SESSION_DIR 优先于 agent 目录", () => {
+		withEnv(
+			{ PI_MEMORY_SESSIONS_DIR: undefined, PI_CODING_AGENT_DIR: "/data/agent", PI_CODING_AGENT_SESSION_DIR: "/custom/sessions" },
+			() => assert.equal(sessionsRoot(), "/custom/sessions"),
+		);
+	});
+
+	it("PI_MEMORY_SESSIONS_DIR 覆盖一切", () => {
+		withEnv({ PI_CODING_AGENT_SESSION_DIR: "/custom/sessions", PI_MEMORY_SESSIONS_DIR: "/mine" }, () => {
+			assert.equal(sessionsRoot(), "/mine");
+		});
+	});
+
+	it("PI_MEMORY_DB 覆盖库路径", () => {
+		withEnv({ PI_MEMORY_DB: "/data/agent/pi-memory/sessions.db" }, () => {
+			assert.equal(dbFile(), "/data/agent/pi-memory/sessions.db");
+		});
 	});
 });

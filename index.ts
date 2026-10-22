@@ -10,8 +10,6 @@
  *   - 单条写入 < 1ms，不攒批，持锁 ~1ms
  */
 
-import * as os from "node:os";
-import * as path from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { Type } from "@earendil-works/pi-ai";
 import { defineTool, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -29,11 +27,9 @@ import {
 } from "./src/db.ts";
 import { SEARCH_MAX_CHARS, READ_MAX_CHARS, formatSearch, formatSessionRead } from "./src/format.ts";
 import { importSessions } from "./src/import.ts";
+import { dbFile, sessionsRoot } from "./src/paths.ts";
 import { renderMessage, renderSummary } from "./src/render.ts";
 import { createSearcher } from "./src/search.ts";
-
-const DEFAULT_DB = path.join(os.homedir(), ".pi", "memory", "sessions.db");
-const DEFAULT_SESSIONS_ROOT = path.join(os.homedir(), ".pi", "agent", "sessions");
 
 type State = {
 	db: DatabaseSync | null;
@@ -44,14 +40,6 @@ type State = {
 };
 
 const state: State = { db: null, searcher: null, counters: new Map(), openError: null, warned: false };
-
-function dbFile(): string {
-	return process.env.PI_MEMORY_DB || DEFAULT_DB;
-}
-
-function sessionsRoot(): string {
-	return process.env.PI_MEMORY_SESSIONS_DIR || DEFAULT_SESSIONS_ROOT;
-}
 
 function ensureDb(): DatabaseSync {
 	if (state.db) return state.db;

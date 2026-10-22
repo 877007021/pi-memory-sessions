@@ -146,11 +146,29 @@ Consequences you must accept:
 
 **Why compaction summaries matter:** pi compresses old context into a structured summary (Goal / Decisions / Next Steps) when the window fills. In a real store, 28 summaries averaged 14,746 chars — a single summary carries roughly 40 messages' worth of signal, and it is already the distilled version of what pi judged important.
 
+## Paths and environment variables
+
+| Variable | Default | Effect |
+|---|---|---|
+| `PI_MEMORY_DB` | `~/.pi/memory/sessions.db` | index location |
+| `PI_MEMORY_SESSIONS_DIR` | inferred from pi | where `/recall import` reads `*.jsonl` from |
+| `PI_CODING_AGENT_SESSION_DIR` | — | pi's own session dir; followed automatically |
+| `PI_CODING_AGENT_DIR` | `~/.pi/agent` | pi's config dir; sessions are read from `<dir>/sessions` |
+
+**Containers and non-persistent homes.** Both defaults live under `$HOME`. If `$HOME` is a container layer (rebuilt on every deploy), the index is thrown away with it, and a sessions dir that pi redirected elsewhere is never found — the symptom is `/recall import` reporting `0 文件` with no error. Give it explicit paths:
+
+```bash
+PI_MEMORY_DB=/data/agent/pi-memory/sessions.db
+PI_MEMORY_SESSIONS_DIR=/data/agent/sessions
+```
+
+`PI_CODING_AGENT_DIR` / `PI_CODING_AGENT_SESSION_DIR` are read too, so a pi that is already configured for a custom layout needs no extra settings here.
+
 ## Known limitations
 
 1. **No traditional↔simplified normalization** — a traditional query will not match simplified content.
 2. **No dictionary segmentation** — exact-phrase matching is weaker than a real tokenizer; rare-character anchors plus bigram scoring compensate.
-3. **Sessions before install are not captured** — use `/recall import`.
+3. **Sessions before install are not captured** — use `/recall import`, and check that it reports a non-zero file count (see [Paths](#paths-and-environment-variables)).
 4. **A dropped write is not retried** — the source of truth is still pi's session file, so re-run `/recall import`. A write failure never breaks a turn.
 5. **No vector search** — see below.
 6. **No `forget` yet** — deleting rows requires `sqlite3` by hand.
@@ -162,7 +180,7 @@ Two reasons, both practical: it keeps the dependency count at zero and the query
 ## Development
 
 ```bash
-node --test test/unit.test.ts      # 43 tests, no pi, no model, no installs
+node --test test/unit.test.ts      # 47 tests, no pi, no model, no installs
 node --no-warnings bench/smoke.ts  # loads index.ts against a mock ExtensionAPI
 node --no-warnings bench/replay.ts # replays real ~/.pi/agent/sessions and reports latency
 ```

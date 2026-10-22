@@ -145,11 +145,29 @@ session_shutdown ─┘                                        ↑
 
 **为什么 compaction 摘要值得单独存：** 上下文窗口满时，pi 会把旧内容压成一段结构化摘要（Goal / Decisions / Next Steps）。在一个真实库里，28 条摘要平均 14,746 字符 —— 一条摘要承载的信息量大约相当于 40 条普通消息，而且它已经是"pi 当时认为什么重要"的提炼版本。
 
+## 路径与环境变量
+
+| 变量 | 默认 | 作用 |
+|---|---|---|
+| `PI_MEMORY_DB` | `~/.pi/memory/sessions.db` | 索引库位置 |
+| `PI_MEMORY_SESSIONS_DIR` | 跟随 pi | `/recall import` 从这里读 `*.jsonl` |
+| `PI_CODING_AGENT_SESSION_DIR` | — | pi 自己的会话目录，自动跟随 |
+| `PI_CODING_AGENT_DIR` | `~/.pi/agent` | pi 的配置目录，会话读 `<dir>/sessions` |
+
+**容器 / `$HOME` 不持久的场景。** 两个默认值都在 `$HOME` 下。如果 `$HOME` 是容器层（每次部署重建），索引会跟着一起丢；而 pi 把会话放到别处时，这里根本扫不到 —— 症状是 `/recall import` 报 `0 个文件`，但不报错。显式给路径：
+
+```bash
+PI_MEMORY_DB=/data/agent/pi-memory/sessions.db
+PI_MEMORY_SESSIONS_DIR=/data/agent/sessions
+```
+
+`PI_CODING_AGENT_DIR` / `PI_CODING_AGENT_SESSION_DIR` 也会被读取，所以已经配置过自定义布局的 pi 不用再额外设置。
+
 ## 已知局限
 
 1. **不做繁简归一** —— 繁体查询搜不到简体内容。
 2. **没有词典分词** —— 精确短语能力弱于真正的分词器；靠稀有字锚点 + 双字打分弥补。
-3. **安装之前的会话不会被捕获** —— 用 `/recall import` 补。
+3. **安装之前的会话不会被捕获** —— 用 `/recall import` 补，并确认它报的文件数不是 0（见 [路径与环境变量](#路径与环境变量)）。
 4. **写入失败不会重试** —— 真相源仍然是 pi 的会话文件，重跑 `/recall import` 即可。写入失败不会影响当轮对话。
 5. **没有向量检索** —— 见下。
 6. **还没有 `forget`** —— 删数据得手动用 `sqlite3`。
@@ -161,7 +179,7 @@ session_shutdown ─┘                                        ↑
 ## 开发
 
 ```bash
-node --test test/unit.test.ts      # 43 个测试，不需要 pi、不需要模型、不需要安装依赖
+node --test test/unit.test.ts      # 47 个测试，不需要 pi、不需要模型、不需要安装依赖
 node --no-warnings bench/smoke.ts  # 用 mock ExtensionAPI 加载 index.ts
 node --no-warnings bench/replay.ts # 回放真实的 ~/.pi/agent/sessions 并输出延迟
 node --no-warnings bench/capabilities.ts # 检查 node:sqlite / FTS5 / contentless_delete / WAL
