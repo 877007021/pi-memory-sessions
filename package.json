@@ -1,6 +1,6 @@
 {
 	"name": "pi-memory-sessions",
-	"version": "0.1.3",
+	"version": "1.0.0",
 	"description": "Pi extension: keyword recall over your past pi sessions, stored in a self-owned SQLite index with CJK-aware search",
 	"type": "module",
 	"main": "index.ts",
