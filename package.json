@@ -41,12 +41,12 @@
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/877007021/pi-memory.git"
+		"url": "git+https://github.com/877007021/pi-memory-sessions.git"
 	},
 	"bugs": {
-		"url": "https://github.com/877007021/pi-memory/issues"
+		"url": "https://github.com/877007021/pi-memory-sessions/issues"
 	},
-	"homepage": "https://github.com/877007021/pi-memory#readme",
+	"homepage": "https://github.com/877007021/pi-memory-sessions#readme",
 	"author": "nanh",
 	"license": "MIT"
 }

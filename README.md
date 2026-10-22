@@ -41,7 +41,7 @@ pi install npm:pi-memory-sessions
 Or straight from the repository:
 
 ```bash
-pi install github:877007021/pi-memory
+pi install github:877007021/pi-memory-sessions
 ```
 
 Or load a checkout directly:
