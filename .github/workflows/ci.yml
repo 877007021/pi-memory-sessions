@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: ["22.19", "22.x"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # 单元测试只依赖 Node 内置模块（node:sqlite / fs / crypto），
+      # 所以不需要 npm install，也没有构建步骤。
+      - name: Unit tests
+        run: node --test --test-reporter=spec test/unit.test.ts
+
+      - name: Capability check (FTS5 + contentless_delete)
+        run: node --no-warnings bench/capabilities.ts

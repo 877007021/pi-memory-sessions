@@ -1,28 +1,52 @@
 {
-	"name": "pi-memory-sessions",
+	"name": "pi-session-memory",
 	"version": "0.1.0",
-	"description": "Pi extension: long-term keyword recall over past session transcripts (SQLite FTS5, CJK-aware, zero dependencies)",
+	"description": "Pi extension: keyword recall over your past pi sessions, stored in a self-owned SQLite index with CJK-aware search",
 	"type": "module",
 	"main": "index.ts",
-	"keywords": ["pi", "pi-package", "pi-coding-agent", "memory", "search", "sqlite", "fts5"],
+	"keywords": [
+		"pi",
+		"pi-package",
+		"pi-coding-agent",
+		"memory",
+		"session",
+		"recall",
+		"search",
+		"sqlite",
+		"fts5",
+		"chinese",
+		"cjk"
+	],
 	"pi": {
 		"extensions": ["./index.ts"]
 	},
+	"files": [
+		"index.ts",
+		"src/",
+		"README.md",
+		"DESIGN.md",
+		"LICENSE"
+	],
 	"scripts": {
-		"test": "node --test test/",
-		"typecheck": "tsc -p tsconfig.json --noEmit",
+		"test": "node --test test/unit.test.ts",
+		"smoke": "node --no-warnings bench/smoke.ts",
 		"bench": "node --no-warnings bench/replay.ts"
 	},
 	"peerDependencies": {
 		"@earendil-works/pi-coding-agent": ">=1.0.0",
 		"@earendil-works/pi-ai": ">=1.0.0"
 	},
-	"devDependencies": {
-		"@types/node": "^22.0.0",
-		"typescript": "^5.9.0"
-	},
 	"engines": {
 		"node": ">=22.19.0"
 	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/877007021/pi-memory.git"
+	},
+	"bugs": {
+		"url": "https://github.com/877007021/pi-memory/issues"
+	},
+	"homepage": "https://github.com/877007021/pi-memory#readme",
+	"author": "nanh",
 	"license": "MIT"
 }

@@ -1,99 +1,166 @@
-# pi-memory
+# pi-session-memory
 
-给 [pi](https://github.com/earendil-works/pi) 的**会话长期记忆**：自动保存每次对话，支持中文 / 英文 / 中英混排的关键词检索，供模型和你在以后按需查回。
+Keyword recall over **your past [pi](https://github.com/earendil-works/pi) sessions** — works for Chinese, English, and mixed content.
 
-和笔记型记忆插件（手动 `memory_write` 写 MEMORY.md）不同，这个插件**不要求任何人主动记什么** —— 它捕获 `message_end`，把消息渲染成 markdown 落进自己拥有的 SQLite 库。删掉 pi 的 `sessions/*.jsonl` 也不影响它。
+Every conversation pi runs is captured into a SQLite index that this extension owns. Delete pi's `sessions/*.jsonl` and recall still works. Ask "what did we decide about X last month?" and the agent can actually answer, because it can search.
 
-零依赖：只用 `node:sqlite` + FTS5（Node ≥ 22.19，pi 本身的要求）。
+Zero runtime dependencies: `node:sqlite` + FTS5, both built into Node.
 
-## 安装
-
-```bash
-pi install /path/to/pi-memory
+```text
+you ▸ /recall 缓存索引
+      命中 8 条（2.4ms）
+      [2026-10-15 14:02 · 3 周前 · ~/code/api · "cache sharding"]
+        #122 assistant msg_id=5541 score=1.00
+          …按会话分片，索引写在 WAL 之后…【缓存】索引…
 ```
 
-或开发时直接挂：
+## What this is / is not
+
+| | |
+|---|---|
+| **Is** | Automatic, lossless capture of session transcripts, searchable by keyword |
+| **Is not** | A note-taking memory (`MEMORY.md`). Nothing is curated, summarized, or injected into the system prompt |
+| **Is not** | Semantic/vector search. Keywords only ([why](#why-keywords-and-not-vectors)) |
+
+If you want the agent to *remember a preference*, that is a curated-notes problem. This solves the other half: *finding what actually happened*.
+
+## Requirements
+
+- pi ≥ 1.0
+- **Node ≥ 22.19** — for `node:sqlite`
+- SQLite ≥ 3.43 — for FTS5 `contentless_delete` (bundled with the Node versions above)
+
+The extension refuses to start with an actionable message if either is missing.
+
+## Install
+
+```bash
+pi install github:877007021/pi-memory
+```
+
+Or load a checkout directly:
 
 ```bash
 pi --extension ./index.ts
 ```
 
-## 用法
+Or copy the directory into `~/.pi/agent/extensions/` (auto-discovered, no settings change).
 
-模型侧：
+## Usage
 
-- `session_search({ query })` —— 搜历史。用户说「上次」「之前」「我们讨论过」时会触发。
-- `session_read({ session_id, around_msg_id })` —— 读出命中点前后的连续对话。
+Model-facing tools (registered with `promptSnippet` + `promptGuidelines`, so they appear in the system prompt and get used without being told):
 
-你侧：
-
-```
-/recall 缓存索引          查
-/recall stats            库有多大、多少条
-/recall import           把已有 sessions/*.jsonl 一次性导入（分批，不卡 UI）
-```
-
-## 它怎么工作
-
-```
-message_end         ─┐
-session_start        │
-session_compact      ├─→ 渲染 markdown ─→ 脱敏 ─→ SQLite(WAL) ─→ 双通道 FTS5
-session_shutdown    ─┘                                        ↑
-                                        session_search / session_read / /recall
-```
-
-`session_search` 是三阶段检索：
-
-1. 分词：中文单字 + 双字两路，拉丁词两路都用
-2. 用**最稀有的 3 个单字**做锚点召回（`ORDER BY rowid DESC` 让 FTS5 早停）
-3. 双字覆盖率打分，时间做 tiebreak
-
-不这么做的话，中文长查询会直接 0 命中（全部 bigram AND 等价于精确短语匹配），而 OR 又会被高频字挤爆候选窗口。这些数字都在 [DESIGN.md](DESIGN.md) 里，用真实语料（17.8M 字符）测的。
-
-## 性能（实测，29.5k 条消息 / 95MB 库）
-
-| 操作 | 耗时 |
+| Tool | Purpose |
 |---|---|
-| 写入一条消息 | 0.53 ms |
-| 检索（K=200 候选） | 5–15 ms |
-| 读 21 条上下文 | 0.06 ms |
-| 并发第二个 pi 进程写入 | 1.2 ms |
+| `session_search` | Search past sessions by keyword |
+| `session_read` | Read a contiguous window around a hit |
 
-查询耗时由候选窗口 K 决定，**不随库增长**。
+User-facing command:
 
-## 数据在哪
+```bash
+/recall <keyword>   search
+/recall stats       store size, message and session counts
+/recall import      import existing sessions/*.jsonl (batched, does not block the UI)
+```
+
+> `/recall import` is how you get history from before the extension was installed. It is safe to run repeatedly — writes are idempotent.
+
+## How it works
+
+```
+message_end      ─┐
+session_start     │
+session_compact   ├─→ render markdown ─→ SQLite (WAL) ─→ dual-channel FTS5
+session_shutdown ─┘                                            ↑
+                                          session_search / session_read / /recall
+```
+
+Capture happens at `message_end`, which fires for every finalized message before pi persists it. Successful tool results are dropped: they are ~90% of transcript volume and the lowest-signal content in it.
+
+`session_search` is a three-stage pipeline:
+
+1. **Tokenize** — CJK unigrams for recall, CJK bigrams for precision, Latin tokens in both channels.
+2. **Recall** — take the three rarest unigrams as anchors, then `FTS5 chars:("a" "b" "c") ORDER BY rowid DESC LIMIT K`, which lets FTS5 stop early.
+3. **Score** — bigram coverage, with recency as the tiebreak.
+
+Each stage exists because the naive alternative was measured and failed:
+
+| Naive approach | Measured failure |
+|---|---|
+| AND over all bigrams | **0 hits** for any natural-language Chinese query of 5+ chars |
+| OR over all bigrams | candidates swamped by high-frequency characters |
+| IDF weighting | cross-word bigrams (`的缓`, `式是`) are rare but meaningless, so they win the ranking |
+| `ORDER BY bm25` | must score every match: 36 ms and grows linearly |
+| `LIKE '%x%'` | full scan, 87 ms and grows linearly |
+
+Query cost is **O(candidate window)**, not O(store size).
+
+## Performance
+
+Measured on 29.5k real messages / 95 MB index:
+
+| Operation | Time |
+|---|---|
+| Write one message | 0.53 ms |
+| Search (K=200 candidates) | 5–15 ms |
+| Read 21 messages of context | 0.06 ms |
+| Second pi process writing concurrently | 1.2 ms |
+
+Real install, 7,370 messages / 41 sessions: search p50 **0.1–0.4 ms**.
+
+## Security
+
+**This extension stores transcripts verbatim. There is no redaction.**
+
+That is a deliberate choice: masking breaks searchability (you cannot search for `OPENAI_API_KEY` or a variable name if it was replaced), and partial masking is worse than none because it implies the store is clean when it is not.
+
+Consequences you must accept:
+
+- `~/.pi/memory/sessions.db` contains **everything you or your tools ever printed**, including secrets that passed through a conversation.
+- Treat it as a sensitive file: do not commit it, do not sync it to a public location, encrypt backups.
+- pi's own `sessions/*.jsonl` already stores the same content; this index is no broader than what pi already keeps, but it is in one file and it outlives `sessions/` deletion.
+
+`PI_MEMORY_DB` relocates the store if you want it on an encrypted volume.
+
+## Data
 
 ```
 ~/.pi/memory/sessions.db
 ```
 
-可用 `PI_MEMORY_DB` 改路径，`PI_MEMORY_SESSIONS_DIR` 改导入源。
-
-| 存 | 不存 |
+| Stored | Dropped |
 |---|---|
-| user 消息 | system prompt |
-| assistant 文本 | thinking |
-| assistant 工具调用（名称 + 参数） | 成功的 toolResult |
-| 失败的 toolResult（前 500 字） | 图片二进制 |
-| compaction 摘要 | |
+| user messages | system prompt |
+| assistant text | thinking blocks |
+| tool calls (name + arguments) | successful tool results |
+| failed tool results (first 500 chars) | image payloads |
+| compaction summaries | |
 
-写盘前**不做任何脱敏** —— 这是本地私有库，打码会让内容不可搜。
+**Why compaction summaries matter:** pi compresses old context into a structured summary (Goal / Decisions / Next Steps) when the window fills. In a real store, 28 summaries averaged 14,746 chars — a single summary carries roughly 40 messages' worth of signal, and it is already the distilled version of what pi judged important.
 
-> ⚠️ 因此 `~/.pi/memory/sessions.db` 里会有你贴过的全部内容，包括密钥。请把它当敏感文件：不要提交、不要同步到公开位置。
+## Known limitations
 
-## 已知局限
+1. **No traditional↔simplified normalization** — a traditional query will not match simplified content.
+2. **No dictionary segmentation** — exact-phrase matching is weaker than a real tokenizer; rare-character anchors plus bigram scoring compensate.
+3. **Sessions before install are not captured** — use `/recall import`.
+4. **A dropped write is not retried** — the source of truth is still pi's session file, so re-run `/recall import`. A write failure never breaks a turn.
+5. **No vector search** — see below.
+6. **No `forget` yet** — deleting rows requires `sqlite3` by hand.
 
-1. 繁简不归一：繁体查询搜不到简体内容。
-2. 无词典分词：精确短语能力弱于真分词器；靠稀有字锚点召回 + 双字打分弥补。
-3. 插件未加载期间的会话不会被捕获 —— 用 `/recall import` 补。
-4. 库本身会被删除；建议纳入备份。
-5. 只做关键词检索，没有向量语义检索（v2）。
+### Why keywords and not vectors
 
-## 开发
+Two reasons, both practical: it keeps the dependency count at zero and the query at single-digit milliseconds. Semantic search would help when you remember the concept but not the words — that is a real gap, and it is the next thing to add (a `vec` table keyed by `msg.id`, no schema change to existing tables).
+
+## Development
 
 ```bash
-node --test test/unit.test.ts     # 40 个单元测试，无需 pi、无需模型
-node --no-warnings bench/smoke.ts # 接线冒烟：mock ExtensionAPI 跑完整写入+检索
-node --no-warnings bench/replay.ts # 用真实 sessions/*.jsonl 回放并测延迟
+node --test test/unit.test.ts      # 43 tests, no pi, no model, no installs
+node --no-warnings bench/smoke.ts  # loads index.ts against a mock ExtensionAPI
+node --no-warnings bench/replay.ts # replays real ~/.pi/agent/sessions and reports latency
 ```
+
+Design notes, measurements, and the assumptions that testing disproved are in [DESIGN.md](DESIGN.md).
+
+## License
+
+MIT

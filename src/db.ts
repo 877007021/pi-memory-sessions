@@ -87,9 +87,26 @@ export function openDb(file: string): DatabaseSync {
 	const row = db.prepare("pragma user_version").get() as { user_version?: number } | undefined;
 	const version = Number(row?.user_version ?? 0);
 	if (version > SCHEMA_VERSION) {
-		throw new Error(`pi-memory: 数据库版本 ${version} 高于本扩展支持的 ${SCHEMA_VERSION}，请升级扩展`);
+		db.close();
+		throw new Error(
+			`pi-memory: database schema v${version} is newer than this extension supports (v${SCHEMA_VERSION}). Upgrade the extension.`,
+		);
 	}
-	db.exec(SCHEMA);
+
+	try {
+		db.exec(SCHEMA);
+	} catch (error) {
+		// 不同 Node 构建的内置 SQLite 可能没有 FTS5 / contentless_delete，
+		// 原始报错对用户没有意义，这里给可执行的提示。
+		db.close();
+		const detail = error instanceof Error ? error.message : String(error);
+		throw new Error(
+			`pi-memory: cannot initialize the index at ${file} (${detail}).\n` +
+				`This extension needs Node >= 22.19 with FTS5 and contentless_delete (SQLite >= 3.43). ` +
+				`Current Node: ${process.version}. Set PI_MEMORY_DB to another path or upgrade Node.`,
+		);
+	}
+
 	if (version !== SCHEMA_VERSION) db.exec(`pragma user_version = ${SCHEMA_VERSION}`);
 	return db;
 }
