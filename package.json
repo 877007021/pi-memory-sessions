@@ -48,5 +48,9 @@
 	},
 	"homepage": "https://github.com/877007021/pi-memory-sessions#readme",
 	"author": "nanh",
-	"license": "MIT"
+	"license": "MIT",
+	"publishConfig": {
+		"access": "public",
+		"registry": "https://registry.npmjs.org/"
+	}
 }

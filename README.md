@@ -167,6 +167,23 @@ node --no-warnings bench/replay.ts # replays real ~/.pi/agent/sessions and repor
 
 Design notes, measurements, and the assumptions that testing disproved are in [DESIGN.md](DESIGN.md).
 
+### Releasing
+
+Publishing goes through npm Trusted Publishing (OIDC), so there is no npm token
+in this repository and no OTP step.
+
+```bash
+npm version patch        # or minor / major
+ git push --follow-tags
+```
+
+The `v*` tag triggers `.github/workflows/publish.yml`, which checks that the tag
+matches `package.json`, runs the test suite and the capability check, then
+publishes with a provenance signature.
+
+The npm package must already exist before Trusted Publishing can be configured —
+that first version has to be published once with a token or OTP.
+
 ## License
 
 MIT
