@@ -1,4 +1,4 @@
-# pi-session-memory
+# pi-memory-sessions
 
 Keyword recall over **your past [pi](https://github.com/earendil-works/pi) sessions** — works for Chinese, English, and mixed content.
 
@@ -33,6 +33,12 @@ If you want the agent to *remember a preference*, that is a curated-notes proble
 The extension refuses to start with an actionable message if either is missing.
 
 ## Install
+
+```bash
+pi install npm:pi-memory-sessions
+```
+
+Or straight from the repository:
 
 ```bash
 pi install github:877007021/pi-memory
